@@ -6,6 +6,15 @@ const app = express();
 app.use(express.json());
 dotenv.config();
 
+function validateTitle(title) {
+    const allowedPattern = /^[a-zA-Z0-9\s.,!?'"()-]{1,100}$/;
+    return allowedPattern.test(title);
+}
+
+function validateId(id) {
+    return /^\d+$/.test(id);
+}
+
 const db = new sqlite3.Database('./db/todos.db', (err) => {
     if (err) {
         console.error('Error connecting to database:', err.message);
@@ -38,14 +47,14 @@ app.get('/todos', (req, res) => {
 
 app.post('/todos', (req, res) => {
     const { title } = req.body;
-    if (!title) {
-        return res.status(400).json({ error: 'Title is required' });
+    if (!title || !validateTitle(title)) {
+        return res.status(400).json({ error: 'Invalid or missing title' });
     }
     db.run('INSERT INTO todos (title) VALUES (?)', [title], function (err) {
         if (err) {
             res.status(500).json({ error: err.message });
         } else {
-            res.status(201).json({ id: this.lastID, title: title });
+            res.status(201).json({ id: this.lastID, title });
         }
     });
 });
@@ -53,19 +62,29 @@ app.post('/todos', (req, res) => {
 app.put('/todos/:id', (req, res) => {
     const { title, completed } = req.body;
     const { id } = req.params;
+
+    if (!validateId(id) || !title || !validateTitle(title)) {
+        return res.status(400).json({ error: 'Invalid title or ID' });
+    }
+
     db.run('UPDATE todos SET title = ?, completed = ? WHERE id = ?', [title, completed, id], function (err) {
         if (err) {
             res.status(500).json({ error: err.message });
         } else if (this.changes === 0) {
             res.status(404).json({ error: 'Todo not found' });
         } else {
-            res.json({ id: id, title: title, completed: completed });
+            res.json({ id, title, completed });
         }
     });
 });
 
 app.delete('/todos/:id', (req, res) => {
     const { id } = req.params;
+
+    if (!validateId(id)) {
+        return res.status(400).json({ error: 'Invalid ID' });
+    }
+
     db.run('DELETE FROM todos WHERE id = ?', [id], function (err) {
         if (err) {
             res.status(500).json({ error: err.message });
